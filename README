@@ -1,0 +1,10 @@
+libopensmskummeeplugin
+
+libopensmskummeeplugin is an OpenSM performance manager plugin.  The plugin
+receives data from the Performance Manager and logs that data to a MySQL
+database.  Scripts are provided for integration to SKUMMEE.  However, these
+scripts are not required to use the plugin; direct DB queries are possible.
+Furthermore, a CLI tools is provided for most of the basic data mining
+operations.  For more information on OpenSM or other Open Fabrics software see:
+http://www.openfabrics.org/
+

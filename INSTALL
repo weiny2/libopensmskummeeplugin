@@ -1,0 +1,47 @@
+Installing this package requires a few manual steps...
+
+After the install do the following.
+
+1) Set the user/password for the mysql DB in the file:
+   /etc/libopensmskummee.conf
+   This allows the plugin (in OpenSM) and install scripts to connect to MySQL.
+
+2) Create the MySQL DB for the plugin.  (If you don't have a MySQL installed
+   see that documentation for more information.  http://www.mysql.com/)
+
+   2a) connect to your mysql db and run the following command.
+      create database opensmskummeedata;
+   2b) from a prompt run (as root or another user with MySQL connectivity.)
+      $ opensmskummee_create_db.pl
+
+If you are _NOT_ using SKUMMEE and just want MySQL data skip to step 4
+
+3) If you _ARE_ using SKUMMEE configure it.
+   (see: https://sourceforge.net/projects/skummee for more information)
+
+   Run [*]:
+   $ chown :<skummee_user> /etc/libopensmskummee.conf
+
+   Consult Jeff regarding set up of SKUMMEE nodes.  Hopefully we will get back
+   to being automated in the future.
+
+      [*] Where <skummee_user> is the user under which skummee runs.
+
+4) And finally turn it on in OpenSM.
+
+   edit the opensm.opts file
+   # enable perfmgr
+   perfmgr TRUE
+   # point OpenSM to this plugin
+   event_plugin_name opensmskummeeplugin
+
+5) Restart opensm 
+
+   $ /etc/init.d/opensmd restart
+
+6) Wait at least 1 sweep time period.  (Default 180 Sec)
+
+7) verify that data is being entered into the DB.
+
+   $ opensmskummeequery -R
+

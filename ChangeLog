@@ -1,0 +1,74 @@
+- Tue May 04 2010 Ira Weiny <weiny2@llnl.gov>
+
+	* : 2.1.0-1 tag
+	* : Update INSTALL doc
+
+- Mon Apr 19 2010 Ira Weiny <weiny2@llnl.gov>
+
+	* : Change output to match SKUMMEE's expectations on character
+	limitations
+
+- Thu Apr 15 2010 Ira Weiny <weiny2@llnl.gov>
+
+	* : Made all error counters compatible with ibqueryerrors (libibmad)
+	* : Added node-name-map support
+	* : Added SKUMMEE output for all counters on all nodes.
+
+- Wed Mar 02 2010 Ira Weiny <weiny2@llnl.gov>
+
+	* : 2.0.0-1 tag
+
+- Wed Aug 21 2008 Ira Weiny <weiny2@llnl.gov>
+
+	* : Updated to new event plugin interface in master branch
+	    WARNING: Now this tree is not compatible with opensm version <= 3.2.2
+	* : Update Rcv Switch Relay errors message on SKUMMEE page
+
+- Wed Jul 16 2008 Ira Weiny <weiny2@llnl.gov>
+
+	* : Removed the glib dependancy.  malloc and free should be sufficient
+	    for this operation.
+	* : Added "Counter" variables to thresh DB.  These will give an
+	    "impulse" type display to the variables.
+
+- Mon May 12 2008 Ira Weiny <weiny2@llnl.gov>
+
+	* : 1.0.1-4 tag
+	* : Added opensmskummeequery man page
+	* : Added README file
+	* : updated INSTALL file to reflect the option of not using SKUMMEE and make
+	    more generic
+
+- Thu Mar 20 2008 Ira Weiny <weiny2@llnl.gov>
+
+	* : 1.0.1-3 tag
+	* : scripts/opensmskummee_update_thresh.pl.in: fix text for link down error
+
+- Thu Mar 20 2008 Ira Weiny <weiny2@llnl.gov>
+
+	* : 1.0.1-2 tag
+	* : fix libopensmskummee.conf update error
+
+- Thu Feb 14 2008 Ira Weiny <weiny2@llnl.gov>
+
+	* : 1.0.1-1 tag
+	* : Add option which allows for the suppression of errors in
+	    opensmskummeequery output
+	* : Add config option CLEAR_DB_ON_LOAD default = false
+
+- Fri Dec 14 2007 Ira Weiny <weiny2@llnl.gov>
+
+	* : Add genders support to be able to sumarize the fabric errors on
+	    skummee
+
+- Thu Dec 06 2007 Ira Weiny <weiny2@llnl.gov>
+
+	* : Most functionality complete
+	* : Add skummeeopensmquery to take care of allowing SKUMMEE to query the DB.
+	    This CLI executable will also clear and report errors stored in the
+		 plugin's DB.
+
+- Thu Aug 30 2007 Ira Weiny <weiny2@llnl.gov>
+
+	* : initial creation
+

@@ -1,0 +1,466 @@
+#!/usr/bin/perl
+# 
+# Copyright (C) 2007, Lawrence Livermore National Security, LLC.
+# Produced at Lawrence Livermore National Laboratory (cf, DISCLAIMER).
+# Written by Ira Weiny weiny2@llnl.gov
+# CODE-235483
+# 
+# This file is part of libopensmskummeeplugin
+# For details, see http://www.llnl.gov/linux/.
+# 
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License (as published by the Free
+# Software Foundation) version 2, dated June 1991.
+# 
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the GNU
+# General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+# Place, Suite 330, Boston, MA 02111-1307 USA
+# 
+# OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
+# 
+# Our Preamble Notice
+# 
+# A. This notice is required to be provided under our contract with the U.S.
+# Department of Energy (DOE). This work was produced at the Lawrence Livermore
+# National Laboratory under Contract No.  DE-AC52-07NA27344 with the DOE.
+# 
+# 
+
+require 5.005;
+
+use strict;
+use Getopt::Std;
+use DBI;
+use SNMP;
+
+# This must be in the first 60 lines of the file for the install to properly
+# change the prefix
+my $skummee_command = "EXEC_PREFIX_NOT_SET/opensmskummeequery";
+
+# Defaults and globals
+my $conffile = "@CONFFILEPREFIX@/libopensmskummee.conf";
+my $argv0 = `basename $0`;
+chomp $argv0;
+my $database_name = "thresh";
+my $user = "root";
+my $password = "";
+my $line = "";
+my $drop_only = undef;
+my $cluster = "";
+my $dbh = undef;
+my $sth;
+my @var_list = ();
+my $switch_host_num = 10000;
+my $switch_host_name = "Total_IB_Switch_Errors";
+my $num_ib_ports_per_node = 1;
+
+# =========================================================================
+# use genders if available from configure
+if (@PERL_USEGENDERS@ == 1) {
+	use Libgenders;
+	my $genders_hdl = Libgenders->genders_handle_create();
+	$genders_hdl->genders_load_data();
+	$cluster = $genders_hdl->genders_getattrval("cluster");
+}
+
+# =========================================================================
+sub issue_query
+{
+      	my $query_str = $_[0];
+	my $sql = qq{ $query_str };
+	$sth = $dbh->prepare( $sql );
+	if (!$sth->execute()) {
+		print ("DB Error: $query_str\n");
+		return (1);
+	}
+	return (0);
+}
+
+# =========================================================================
+sub get_max_variable_num
+{
+	my $str = sprintf("select max(var) from %s_vl", $cluster);
+	issue_query($str);
+	my @row = $sth->fetchrow_array();
+	if ((scalar @row) != 1) {
+		printf("Failed to find max var number from %s_vl", $cluster);
+		exit 1;
+	}
+	return ($row[0]+1);
+}
+
+
+# =========================================================================
+# build_var_list(num_ib_ports_per_node)
+sub build_var_list
+{
+	my $num_ib_ports = $_[0];
+
+	# build our varaiable list.
+	# The switch variables first
+	my $tmp = { oid => "SymbolErrors_sum", des => "Symbol Errors",
+			alias => "IBSwSymbolErr", blurb => "Total symbol errors on IB switches",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "SymbolErrors_sum_counter", des => "Symbol Errors Counter",
+			alias => "IBSwSymbolErrCnt", blurb => "Total symbol errors on IB switches expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	$tmp = { oid => "LinkRecovers_sum", des => "Link Errors",
+			alias => "IBSwSymbolErr", blurb => "Total link errors on IB switches",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "LinkRecovers_sum_counter", des => "Link Errors Counter",
+			alias => "IBSwSymbolErrCnt", blurb => "Total link errors on IB switches expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	$tmp = { oid => "LinkDowned_sum", des => "Link Down",
+			alias => "IBSwSymbolErr", blurb => "Total link down events on IB switches",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "LinkDowned_sum_counter", des => "Link Down Counter",
+			alias => "IBSwSymbolErrCnt", blurb => "Total link down events on IB switches expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	$tmp = { oid => "RcvErrors_sum", des => "Rcv Errors",
+			alias => "IBSwRcvErr", blurb => "Total Rcv errors on IB switches",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "RcvErrors_sum_counter", des => "Rcv Errors Counter",
+			alias => "IBSwRcvErrCnt", blurb => "Total Rcv errors on IB switches expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	$tmp = { oid => "RcvRemotePhysErrors_sum", des => "Rcv Remote Physical Errors",
+			alias => "IBSwRcvRemPhysErr", blurb => "Total Rcv remote physical errors on IB switches",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "RcvRemotePhysErrors_sum_counter", des => "Rcv Remote Physical Errors Counter",
+			alias => "IBSwRcvRemPhysErrCnt", blurb => "Total Rcv remote physical errors on IB switches expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	$tmp = { oid => "RcvSwitchRelayErrors_sum", des => "Rcv Switch Relay Errors",
+			alias => "IBSwRcvSwRelayErr",
+			blurb => "Total Rcv Switch Relay errors on IB switches.<br>Guidelines:<br>These errors can safely be IGNORED as they are generated whenever IPoIB generates ARP's",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "RcvSwitchRelayErrors_sum_counter", des => "Rcv Switch Relay Errors Counter",
+			alias => "IBSwRcvSwRelayErrCnt",
+			blurb => "Total Rcv Switch Relay errors on IB switches.<br>Guidelines:<br>These errors can safely be IGNORED as they are generated whenever IPoIB generates ARP's expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	$tmp = { oid => "XmtDiscards_sum", des => "Xmit Discards",
+			alias => "IBSwXmitDiscards", blurb => "Total Xmit Discards on IB switches",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "XmtDiscards_sum_counter", des => "Xmit Discards Counter",
+			alias => "IBSwXmitDiscardsCnt", blurb => "Total Xmit Discards on IB switches expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	$tmp = { oid => "XmtConstraintErrors_sum", des => "Xmit Constraint Errors",
+			alias => "IBSwXmitConstErr", blurb => "Total Xmit Constraint errors on IB switches",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "XmtConstraintErrors_sum_counter", des => "Xmit Constraint Errors Counter",
+			alias => "IBSwXmitConstErrCnt", blurb => "Total Xmit Constraint errors on IB switches expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	$tmp = { oid => "RcvConstraintErrors_sum", des => "Rcv Constraint Errors",
+			alias => "IBSwRcvConstErr", blurb => "Total Rcv Constraint errors on IB switches",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "RcvConstraintErrors_sum_counter", des => "Rcv Constraint Errors Counter",
+			alias => "IBSwRcvConstErrCnt", blurb => "Total Rcv Constraint errors on IB switches expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	$tmp = { oid => "LinkIntegrityErrors_sum", des => "Link Integrity Errors",
+			alias => "IBSwLinkIntErr", blurb => "Total Link integrity errors on IB switches",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "LinkIntegrityErrors_sum_counter", des => "Link Integrity Errors Counter",
+			alias => "IBSwLinkIntErrCnt", blurb => "Total Link integrity errors on IB switches expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	$tmp = { oid => "ExcBufOverrunErrors_sum", des => "Buffer Overrun Errors",
+			alias => "IBSwBufOverrunErr", blurb => "Total Buffer overrun errors on IB switches",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "ExcBufOverrunErrors_sum_counter", des => "Buffer Overrun Errors Counter",
+			alias => "IBSwBufOverrunErrCnt", blurb => "Total Buffer overrun errors on IB switches expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	$tmp = { oid => "VL15Dropped_sum", des => "VL15 Drops",
+			alias => "IBSwVL15Dropped", blurb => "Total VL15 Dropps on IB switches",
+			switch_var => 1, counter => 0};
+	push @var_list, $tmp;
+	$tmp = { oid => "VL15Dropped_sum_counter", des => "VL15 Drops Counter",
+			alias => "IBSwVL15DroppedCnt", blurb => "Total VL15 Dropps on IB switches expressed by a differential count",
+			switch_var => 1, counter => 1};
+	push @var_list, $tmp;
+
+	# and Then the counters for the HCA ports
+	for (my $i = 1; $i <= $num_ib_ports; $i = $i+1)
+	{
+		my $oid = sprintf("ibport%d-error_sum", $i);
+		my $des = sprintf("Total IB errors on Port%d", $i);
+		my $alias = sprintf("IBErr%d", $i);
+		$tmp = { oid => $oid, des => $des, alias => $alias, blurb => $des,
+			switch_var => 0, counter => 0};
+		push @var_list, $tmp;
+	}
+}
+
+
+# =========================================================================
+# add_node_entry (host_num, host_name)
+sub add_node_entry
+{
+	my $host_num = $_[0];
+	my $host_name = $_[1];
+	my $str = sprintf("select host from %s_n where name=\"%s\"",
+		$cluster, $host_name);
+	issue_query($str);
+	my @row = $sth->fetchrow_array();
+	if ((scalar @row) != 0) {
+		printf ("   found: \"%s\" in %s_n\n", $host_name, $cluster);
+	} else {
+		printf ("   NOT found: \"%s\" in %s_n\n", $host_name, $cluster);
+		$str = sprintf("insert into %s_n values(%d,7,\"0\",
+			\"%s\",\"chaos\",7,0,161,2,0,0,\"0\",
+			\"user1\",\"\",65535,10)",
+			$cluster, $host_num, $host_name);
+		issue_query($str);
+	}
+}
+
+# =========================================================================
+# add a single entry to the Variable list table, IFF that oid does not exist
+# add_vl_entry(oid, des, alias, blurb)
+sub add_vl_entry
+{
+	my $oid = $_[0];
+	my $des = $_[1];
+	my $alias = $_[2];
+	my $blurb = $_[3];
+	my $counter = $_[4];
+	my $var_num = get_max_variable_num();
+
+	my $str = sprintf("select var from %s_vl where oid=\"%s\"", $cluster, $oid);
+	issue_query($str);
+	my @row = $sth->fetchrow_array();
+	if ((scalar @row) != 0) {
+		printf ("   found: \"%s\" in %s_vl\n", $oid, $cluster);
+	} else {
+		printf ("   NOT found: \"%s\" in %s_vl; adding... var = %d\n",
+			$oid, $cluster, $var_num);
+		$str = sprintf("insert into %s_vl values(%d,$counter,
+			\"%s\", \"%s\", \"%s\", \"%s\", 0,2)",
+			$cluster, $var_num,
+			$oid, $des, $alias, $blurb);
+		issue_query($str);
+	}
+}
+
+sub get_var_for_oid
+{
+	my $oid = $_[0];
+	my @row;
+
+	# find out the var number for this oid
+	my $str = sprintf("select var from %s_vl where oid=\"%s\"",
+		$cluster, $oid);
+	issue_query($str);
+	@row = $sth->fetchrow_array();
+	if ((scalar @row) != 1) {
+		printf ("ERROR failed to find $oid in variable list table\n");
+		printf ("   query: %s\n", $str);
+		return (-1);
+	}
+	return ($row[0]);
+}
+
+sub add_v_entries
+{
+	my $oid = $_[0];
+	my $switch_var = $_[1];
+	my @row;
+	my @host_nums;
+	my $var = get_var_for_oid($oid);
+
+	if ($var < 0) {
+		printf ("ERROR in get_var_for_oid skipping \"add_v_entries\"\n");
+		return;
+	}
+
+	# find all the hosts in the system
+	my $str = sprintf("select host from %s_n", $cluster);
+	issue_query($str);
+	while (@row = $sth->fetchrow_array) {
+		push @host_nums,$row[0];
+	}
+
+	foreach my $host_num (@host_nums) {
+		# see if the variable is already associated with this host
+		my $str = sprintf("select * from %s_v where host=%d and var=%d",
+			$cluster, $host_num, $var);
+		issue_query($str);
+		@row = $sth->fetchrow_array();
+		if ((scalar @row) == 0) {
+			# If not see if it should be
+			if (
+				(($switch_var == 1) && ($host_num == $switch_host_num))
+					||
+				(($switch_var == 0) && ($host_num != $switch_host_num))
+				)
+			{
+				printf ("      Adding %s(%d) to host num: %d\n", $oid, $var, $host_num);
+				$str = sprintf("insert into %s_v (host,var) values(%d,%d)",
+					$cluster, $host_num, $var);
+				issue_query($str);
+			}
+		}
+	}
+}
+
+# =========================================================================
+#
+sub usage_and_exit
+{
+   my $prog = $_[0];
+   print "Usage: $prog [-d <db_name> -D -S <switch_host_num> -n <num>][-c <cluster_name>]\n";
+   print "   Add libopensmskummee entries to the skummee DB\n";
+   print "   -d <db_name> specify an alternate db name for the skummee DB (default $database_name)\n";
+   print "   -D Remove all entries from thresh\n";
+   print "   -S <switch_host_num> specify a switch_host_num for the <cluster>_v table (default $switch_host_num)\n";
+   print "   -n <num> change the number of IB ports per HCA (default $num_ib_ports_per_node)\n";
+   print "   -c <cluster_name> specify an alternate cluster name (default is to read from genders)\n";
+   print "      Or if genders is unavailable this becomes a mandatory option\n";
+   exit 0;
+}
+
+# =========================================================================
+# main code
+
+# =========================================================================
+# This check can not be moved into the first 60 lines of this file so that it
+# will be performed correctly.
+#
+# Check for proper installation
+# leave this way down here so the EXEC_PREFIX_NOT_SET does not get changed by
+# the install
+if ($skummee_command =~ /.*EXEC_PREFIX_NOT_SET.*/) {
+	print("WARNING: $argv0 does not appear to be installed correctly.\n");
+	print("   \"$skummee_command\"\n");
+	print("   can not be the correct command for skummee to run.\n");
+	print("   Please run \"make install\" to complete the install process.\n");
+	exit 1;
+}
+
+my $remove_mode = undef;
+if (!getopts("hdc:DS:n:")) { usage_and_exit $argv0; }
+if (defined $Getopt::Std::opt_h) { usage_and_exit $argv0; }
+if (defined $Getopt::Std::opt_d) { $database_name = $Getopt::Std::opt_d; }
+if (defined $Getopt::Std::opt_c) { $cluster = $Getopt::Std::opt_c; }
+if (defined $Getopt::Std::opt_D) { $remove_mode = $Getopt::Std::opt_D; }
+if (defined $Getopt::Std::opt_S) { $switch_host_num = $Getopt::Std::opt_S; }
+if (defined $Getopt::Std::opt_n) { $num_ib_ports_per_node = $Getopt::Std::opt_n; }
+
+if ($cluster eq "") {
+	print ("ERROR: cluster is not specified and/or was not read from genders\n");
+	usage_and_exit();
+}
+
+# Get DB credentials from config file.
+open(PASS, $conffile) or die("Error: could not open %s\n", $conffile);
+while ($line = <PASS>)
+{
+  chomp $line;
+  if ($line =~ /^DB_USER (.*)/)
+  {
+     $user = $1;
+  }
+  if ($line =~ /^DB_PASSWORD (.*)/)
+  {
+     $password = $1;
+  }
+}
+close(PASS);
+
+
+## connect to the database
+$dbh = DBI->connect("DBI:mysql:$database_name", $user, $password);
+if (!defined $dbh) {
+   print "ERROR : DB connect failed for $database_name as user $user\n";
+   print "        Please ensure $database_name has been created\n";
+   print "        and that $conffile has the correct user information\n";
+   exit 1;
+}
+print ("Connected to $database_name as user $user\n");
+
+# update the skummee data
+print ("Updating DB...\n");
+
+build_var_list($num_ib_ports_per_node);
+
+if ($remove_mode)
+{
+	my $str = "";
+	$str = sprintf("delete from %s_mod where command=\"%s\"", $cluster, $skummee_command);
+	issue_query($str);
+	# remove the variable list elements.
+	foreach my $variable (@var_list) {
+		printf ("Removing oid %s from %s_v...\n", $variable->{oid}, $cluster);
+		my $var = get_var_for_oid($variable->{oid});
+		if ($var >= 0) {
+			$str = sprintf("delete from %s_v where var=\"%d\"", $cluster, $var);
+			issue_query($str);
+		}
+		printf ("Removing oid %s from %s_vl...\n", $variable->{oid}, $cluster);
+		$str = sprintf("delete from %s_vl where oid=\"%s\"", $cluster, $variable->{oid});
+		issue_query($str);
+	}
+
+	# remove the Swith node entry
+	printf ("Removing host %s from %s_n...\n", $switch_host_name, $cluster);
+	$str = sprintf("delete from %s_n where host=\"%d\"", $cluster, $switch_host_num);
+	issue_query($str);
+
+} else { # add_mode
+	# Check for and add the "Switch Node" entry
+	add_node_entry($switch_host_num, $switch_host_name);
+
+	# check for and add each variable in the "variable list" table
+	foreach my $variable (@var_list) {
+		add_vl_entry($variable->{oid}, $variable->{des},
+			$variable->{alias}, $variable->{blurb}, $variable->{counter});
+		add_v_entries($variable->{oid}, $variable->{switch_var});
+	}
+
+	my $str = sprintf("select * from %s_mod where command=\"%s\"", $cluster, $skummee_command);
+	issue_query($str);
+	my @row = $sth->fetchrow_array();
+	if ((scalar @row) == 0) {
+		my $str = sprintf("insert into %s_mod values(\"%s\", \"-f\", 10)", $cluster, $skummee_command);
+		issue_query($str);
+	}
+}
+
+print ("Update complete\n");
+
+exit 0;
+

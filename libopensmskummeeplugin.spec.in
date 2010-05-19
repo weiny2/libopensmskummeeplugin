@@ -1,0 +1,57 @@
+%if %{?_with_genders:1}%{!?_with_genders:0}
+%define _enable_genders --enable-genders
+%endif
+%if %{?_without_genders:1}%{!?_without_genders:0}
+%define _disable_genders --disable-genders
+%endif
+
+Name: @PROJECT@
+Version: @VERSION@
+Release: @RELEASE@%{?dist}
+
+Summary: OpenSM Skummee plugin
+License: GPL/BSD
+Group: System Environment/Libraries
+BuildRoot: %{_tmppath}/@PROJECT@-@VERSION@-@RELEASE@
+Source: @PROJECT@-@VERSION@.tar.gz
+#Requires: opensm mysql glib
+#BuildRequires: opensm-devel mysql-devel glib-devel pkgconfig
+# chaos build specific.
+%define _enable_genders --enable-genders
+Requires: opensm mysql glib genders
+BuildRequires: opensm-devel mysql-devel glib-devel pkgconfig genders
+
+%description
+libopensmskummeeplugin provides a plugin to integrate the OpenSM PerfMgr events
+to the skummee monitoring system.
+
+%prep
+%setup -q
+
+%build
+%configure \
+        %{?_enable_genders} \
+        %{?_disable_genders}
+make
+
+%install
+make DESTDIR=${RPM_BUILD_ROOT} install
+# remove unpackaged files from the buildroot
+rm -f $RPM_BUILD_ROOT%{_libdir}/*.la
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%files
+%defattr(-,root,root)
+%{_libdir}/libopensmskummeeplugin*.so.*
+%{_libdir}/libopensmskummeeplugin*.a
+%{_libdir}/libopensmskummeeplugin*.so
+%{_sbindir}/*.pl
+%{_sbindir}/opensmskummeequery
+%doc ChangeLog
+%doc INSTALL
+%doc README
+%{_mandir}/man8/*
+%defattr(640,root,root)
+%config(noreplace) %{_sysconfdir}/libopensmskummee.conf

@@ -1,0 +1,171 @@
+#!/usr/bin/perl
+# 
+# Copyright (C) 2007, Lawrence Livermore National Security, LLC.
+# Produced at Lawrence Livermore National Laboratory (cf, DISCLAIMER).
+# Written by Ira Weiny weiny2@llnl.gov
+# CODE-235483
+# 
+# This file is part of libopensmskummeeplugin
+# For details, see http://www.llnl.gov/linux/.
+# 
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License (as published by the Free
+# Software Foundation) version 2, dated June 1991.
+# 
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the GNU
+# General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+# Place, Suite 330, Boston, MA 02111-1307 USA
+# 
+# OUR NOTICE AND TERMS AND CONDITIONS OF THE GNU GENERAL PUBLIC LICENSE
+# 
+# Our Preamble Notice
+# 
+# A. This notice is required to be provided under our contract with the U.S.
+# Department of Energy (DOE). This work was produced at the Lawrence Livermore
+# National Laboratory under Contract No.  DE-AC52-07NA27344 with the DOE.
+# 
+# 
+
+require 5.005;
+
+use strict;
+use Getopt::Std;
+use DBI;
+use SNMP;
+
+# Defaults
+my $database_name = "opensmskummeedata";
+my $user = "root";
+my $password = "";
+my $conffile = "@CONFFILEPREFIX@/libopensmskummee.conf";
+my $line = "";
+my $drop_only = undef;
+
+# =========================================================================
+#
+sub usage_and_exit
+{
+   my $prog = $_[0];
+   print "Usage: $prog [-D]\n";
+   print "   Set up the DB tables needed by libopensmskummee\n";
+   print "   -D Drop the tables and exit\n";
+   exit 0;
+}
+
+my $argv0 = `basename $0`;
+chomp $argv0;
+if (!getopts("hD")) { usage_and_exit $argv0; }
+if (defined $Getopt::Std::opt_h) { usage_and_exit $argv0; }
+if (defined $Getopt::Std::opt_D) { $drop_only = $Getopt::Std::opt_D; }
+
+print ("Warning: Do not run this script when opensm is running with\n");
+print ("         the opensmskummee plugin loaded.\n");
+print ("         Data loss may occur.\n");
+print ("   Are you sure you want to continue (yes/no)? ");
+
+my $input = <STDIN>;
+chomp $input;
+if ($input ne "yes") {
+   print ("Aborting database creation\n");
+   exit 1;
+}
+
+open(PASS, $conffile) or die("Error: could not open %s\n", $conffile);
+while ($line = <PASS>)
+{
+  chomp $line;
+  if ($line =~ /^DB_USER (.*)/)
+  {
+     $user = $1;
+  }
+  if ($line =~ /^DB_NAME (.*)/)
+  {
+     $database_name = $1;
+  }
+  if ($line =~ /^DB_PASSWORD (.*)/)
+  {
+     $password = $1;
+  }
+}
+close(PASS);
+
+my $str = "";
+
+## connect to the database
+my $dbh = DBI->connect("DBI:mysql:$database_name", $user, $password, {
+        PrintError => 0,   ### Don't report errors via warn(  )
+        RaiseError => 0    ### Do report errors via die(  )
+});
+if (!defined $dbh) {
+   print "ERROR : DB connect failed for $database_name as user $user\n";
+   print "        Please ensure $database_name has been created\n";
+   print "        and the DB_PASSWORD in $conffile is correct\n";
+   print "           (MySQL command: \"create database $database_name;\")\n";
+   exit 1;
+}
+print ("Connected to $database_name as user $user\n");
+
+sub issue_query
+{
+      	my $query_str = $_[0];
+      	my $ignore_err = $_[1];
+	my ($sql, $sth);
+	$sql = qq{ $query_str };
+	$sth = $dbh->prepare( $sql );
+	if (!$sth->execute()) {
+                if ("$ignore_err" != "1") {
+		        print ("DB Error: $query_str\n");
+                }
+		return (1);
+	}
+	return (0);
+}
+
+# drop tables
+print ("Dropping Tables... ");
+$str = sprintf("DROP table nodes");
+issue_query($str, 1);
+$str = sprintf("DROP table port_errors");
+issue_query($str, 1);
+$str = sprintf("DROP table port_data_counters");
+issue_query($str, 1);
+$str = sprintf("DROP table port_select_counters");
+issue_query($str, 1);
+print ("[done]\n");
+
+if (!defined $drop_only)
+{
+	# create tables
+	print ("Creating Tables... ");
+	$str = sprintf("create table nodes (guid bigint(64) not null, name char(64),
+		type int(8), primary key (guid))");
+	issue_query($str, 0);
+	$str = sprintf("create table port_errors (guid bigint(64) not null,
+		port int not null, SymbolErrors bigint(64), LinkRecovers bigint(64),
+		LinkDowned bigint(64), RcvErrors bigint(64), RcvRemotePhysErrors
+		bigint(64), RcvSwitchRelayErrors bigint(64), XmtDiscards bigint(64),
+		XmtConstraintErrors bigint(64), RcvConstraintErrors bigint(64),
+		LinkIntegrityErrors bigint(64), ExcBufOverrunErrors bigint(64), VL15Dropped
+		bigint(64), time_diff_s bigint(64), primary key (guid,port))");
+	issue_query($str, 0);
+	$str = sprintf("create table port_data_counters (guid bigint(64) not null,
+		port int not null, xmit_data bigint(64), rcv_data bigint(64), xmit_pkts
+		bigint(64), rcv_pkts bigint(64), unicast_xmit_pkts bigint(64),
+		unicast_rcv_pkts bigint(64), multicast_xmit_pkts bigint(64),
+		multicast_rcv_pkts bigint(64), time_diff_s bigint(64),
+		primary key (guid,port))");
+	issue_query($str, 0);
+	$str = sprintf("create table port_select_counters (guid bigint(64) not null,
+		port int not null, xmit_wait bigint(64), time_diff_s bigint(64),
+		primary key (guid,port))");
+	issue_query($str, 0);
+	print ("[done]\n");
+}
+
+$dbh->disconnect;
+

@@ -1,0 +1,47 @@
+Database Design is described in this document.
+
+The database is modeled after the type of data OpenSM is going to provide
+through the event interface.
+
+The initial DB was set up to have a single entry of all the port data
+counters and port error counters.
+
+The 2.0 version of the DB strives to collect more information that this.  I
+would like to know more about what the port is connected to (link and remote
+port info) as well as collecting historical data.
+
+
+The Node table can stay the same.
+
+Table node
+nodeguid, name, type, timestamp
+
+I think we need a new table Port.
+
+Table port
+nodeguid, portnum, portguid, remoteportguid, timestamp
+
+
+   [What happens when ports/nodes leave the fabric?  How do we record this?
+   Should there be an enter/leave marker on the entries?]
+
+
+Port information tables based on the collection information.  There will be
+multiple entries in each table for each portguid.  timestamp gives us the
+history of what has happened with the cluster.
+
+Table porterrors
+portguid, ... error counters ..., timestamp
+
+Table portcounters
+portguid, ... counters ..., timestamp
+
+Table portselect
+portguid, ... select counters ..., timestamp
+
+Table portinfo
+portguid, ... port info ..., timestamp
+
+
+
+

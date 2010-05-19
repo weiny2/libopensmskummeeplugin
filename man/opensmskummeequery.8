@@ -1,0 +1,66 @@
+.TH OPENSMSKUMMEEQUERY 8 "May 12, 2008" "libopensmskummeeplugin" "OpenSM SKUMMEE plugin"
+
+.SH NAME
+opensmskummeequery \- query the MySQL DB for data stored by
+"libopensmskummeeplugin".  libopensmskummeeplugin is an OpenSM Performance
+Manager plugin which stores data collected by OpenSM into this DB.
+
+.SH SYNOPSIS
+.B opensmskummeequery [-hCsRe] [-c <node>] [-r <node>]
+
+.SH DESCRIPTION
+.PP
+
+opensmskummeequery prints port counter data stored by OpenSM via the plugin
+"libopensmskummeeplugin".
+
+By default it outputs a format designed to be read by SKUMMEE.  However, other
+output formats are more human readable.  Furthermore, opensmskummeequery can be
+used to clear the counters in the DB.
+
+.SH OPTIONS
+
+.PP
+.TP
+\fB\-C\fR
+Clear all of the error counters from the DB
+.TP
+\fB\-c <node>\fR
+Clear the error counters of the node specified.  <node> can be a name or GUID.
+.TP
+\fB\-r <node>\fR
+Report counters for node specified.  <node> can be a name or a GUID.
+.TP
+\fB\-R\fR
+Report counters for all nodes in the dB
+.TP
+\fB-S\fR
+SKUMMEE output: change -R and -r output to be SKUMMEE compatible
+.TP
+\fB\-e\fR
+Report port counters for nodes which have errors.
+.TP
+\fB\-E <var1,var2,...>\fR
+Report port counters for nodes which have errors, ignoring the vars (errors) specified.
+.TP
+\fB\-p <port>\fR
+Limit the error reporting to the port specified.
+.TP
+\fB\-s\fR
+print the SQL Queries as the are submitted to the DB
+.TP
+\fB\-f\fR
+Sum all "none node" errors in to an IB_Fabric,error_sum,<#> entry.  This option
+is used by SKUMMEE.  It's output is not intended to be human readable.
+
+.SH FILES
+.TP
+<path>/ib-node-name-map
+opensmskummeequery uses the ib-node-name-map default from libosmcomp from
+the opensm-libs package.  This file is used to map
+
+
+.SH AUTHOR
+.TP
+Ira Weiny
+.RI < weiny2@llnl.gov >

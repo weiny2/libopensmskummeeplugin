@@ -1,0 +1,99 @@
+dnl Process this file with autoconf to produce a configure script.
+
+AC_INIT(libopensmskummeeplugin)
+AC_META
+AC_CONFIG_AUX_DIR(config)
+AC_CONFIG_SRCDIR([META])
+AM_CONFIG_HEADER(config.h)
+AM_INIT_AUTOMAKE($PROJECT, $VERSION)
+
+dnl Checks for programs
+AC_PROG_CC
+AC_PROG_GCC_TRADITIONAL
+AC_PROG_LIBTOOL
+
+dnl set up a #define for the code to find the config file.
+CONF_TMP1="`eval echo ${sysconfdir}`"
+CONF_TMP2="`echo $CONF_TMP1 | sed 's/^NONE/$ac_default_prefix/'`"
+AC_DEFINE_UNQUOTED(CONF_FILE_PREFIX, ["$CONF_TMP2"], [Config Directory])
+
+dnl OpenSM headers are in $includedir/infiniband
+INC_TMP1="`eval echo ${includedir}/infiniband`"
+INC_TMP2="`echo $INC_TMP1 | sed 's/^NONE/$ac_default_prefix/'`"
+CFLAGS="$CFLAGS -I`eval echo $INC_TMP2`"
+CPPFLAGS="$CPPFLAGS -I`eval echo $INC_TMP2`"
+
+dnl check if we should use genders
+AC_ARG_ENABLE(genders,    [  --enable-genders          enable the use of genders],
+[case "${enableval}" in
+	yes) genders=true ;;
+	no)  genders=false ;;
+	*) AC_MSG_ERROR(bad value ${enableval} for --enable-genders) ;;
+esac],genders=false)
+if test x$genders = xtrue; then
+	AC_CHECK_HEADER([genders.h], , 
+		AC_MSG_ERROR([genders.h not found.  --enable-genders requires genders.h]))
+	AC_CHECK_LIB(genders, genders_handle_create, [],
+		AC_MSG_ERROR([genders_handle_create() not found.  --enable-genders requires libgenders]))
+	PERL_USEGENDERS="1"
+else
+	PERL_USEGENDERS="0"
+fi
+AC_SUBST(PERL_USEGENDERS)
+
+dnl Check for opensm compatibility header
+AC_CHECK_HEADER([opensm/osm_event_plugin.h], , 
+	AC_MSG_ERROR([opensm/osm_event_plugin.h not found.  libopensmskummeeplugin requires opensm with event plugin support.]))
+AC_CHECK_HEADER([mysql/mysql.h], , 
+	AC_MSG_ERROR([mysql/mysql.h not found.  libopensmskummeeplugin requires mysql.]))
+
+dnl Checks for libraries
+AC_CHECK_LIB(pthread, pthread_mutex_init, [],
+	AC_MSG_ERROR([pthread_mutex_init() not found.  libopensmskummeeplugin requires libpthread.]))
+AC_CHECK_LIB(rt, clock_gettime, [],
+	AC_MSG_ERROR([clock_gettime() not found.  libopensmskummeeplugin requires librt.]))
+
+# IKW: go looking for mysql subdir for the libs
+TMP1="`eval echo ${libdir}`"
+TMP2="`echo $TMP1 | sed 's/^NONE/$ac_default_prefix/'`"
+LOCLIBDIR="`eval echo $TMP2`"
+LDFLAGSSAVE=$LDFLAGS
+MYSQLCLIENT_LIBDIR=$LOCLIBDIR/mysql
+LDFLAGS="-L$MYSQLCLIENT_LIBDIR $LDFLAGS"
+AC_CHECK_LIB(mysqlclient_r, mysql_init, [],
+	AC_MSG_ERROR([mysql_init() not found.  libopensmskummeeplugin requires libmysqlclient_r.]))
+LDFLAGS="$LDFLAGSSAVE"
+
+dnl the library version
+libopensmskummeeplugin_api_version=1:1:0
+AC_SUBST(libopensmskummeeplugin_api_version)
+
+dnl We use --version-script with ld if possible
+AC_CACHE_CHECK(whether ld accepts --version-script, ac_cv_version_script,
+    if test -n "`$LD --help < /dev/null 2>/dev/null | grep version-script`"; then
+        ac_cv_version_script=yes
+    else
+        ac_cv_version_script=no
+    fi)
+
+AM_CONDITIONAL(HAVE_LD_VERSION_SCRIPT, test "$ac_cv_version_script" = "yes")
+
+# we have to revive the env CFLAGS as some how they are being overwritten...
+# see http://sources.redhat.com/automake/automake.html#Flag-Variables-Ordering
+# for why they should NEVER be modified by the configure to allow for user
+# overrides.
+CFLAGS=$ac_env_CFLAGS_value
+
+dnl Make appropriate substitution for sysconfdir for use in scripts
+dnl Must expand nested unquoting
+CONFFILEPREFIX_TMP1="`eval echo ${sysconfdir}`"
+CONFFILEPREFIX_TMP2="`echo $CONFFILEPREFIX_TMP1 | sed 's/^NONE/$ac_default_prefix/'`"
+CONFFILEPREFIX="`eval echo $CONFFILEPREFIX_TMP2`"
+AC_SUBST(CONFFILEPREFIX)
+
+AC_CONFIG_FILES([Makefile \
+		libopensmskummeeplugin.spec \
+		scripts/opensmskummee_create_db.pl \
+		scripts/opensmskummee_update_thresh.pl
+		])
+AC_OUTPUT
